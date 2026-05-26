@@ -281,15 +281,18 @@ void compute_error_terms(void)
         error_terms[j].e11_re = (num_re*den_re + num_im*den_im) / den_sq;
         error_terms[j].e11_im = (num_im*den_re - num_re*den_im) / den_sq;
 
-        // delta_e = ΓM_open*e11 - (ΓM_open - ΓM_load)
-        float prod_re = o_re*error_terms[j].e11_re - o_im*error_terms[j].e11_im;
-        float prod_im = o_re*error_terms[j].e11_im + o_im*error_terms[j].e11_re;
+        // delta_e = (ΓM_open - ΓM_load) * (1 - e11)
+        float A_re = o_re - l_re;          // ΓM_open - ΓM_load
+        float A_im = o_im - l_im;
+        float B_re = 1.0f - error_terms[j].e11_re;  // 1 - e11
+        float B_im =       -error_terms[j].e11_im;
 
-        error_terms[j].delta_e_re = prod_re - o_re + l_re;
-        error_terms[j].delta_e_im = prod_im - o_im + l_im;
+        error_terms[j].delta_e_re = A_re*B_re - A_im*B_im;
+        error_terms[j].delta_e_im = A_re*B_im + A_im*B_re;
     }
 
     EEPROM.put(CAL_EEPROM_ADDR, error_terms);
+    EEPROM.put(OSL_EEPROM_ADDR, osl_cal);
 
     display.clearDisplay();
     display.setTextSize(1);
@@ -298,6 +301,44 @@ void compute_error_terms(void)
     display.println(F("Cal complete!"));
     display.println(F("Saved to EEPROM."));
     display.display();
+}
+
+void dumpErrorTerms(void)
+{
+    EEPROM.get(CAL_EEPROM_ADDR, error_terms);
+    EEPROM.get(OSL_EEPROM_ADDR, osl_cal);
+
+    const char* labels[] = {"OPEN", "SHORT", "LOAD"};
+
+    // ── Raw OSL measurements ─────────────────────────────────────────────────
+    Serial.println(F("=== OSL RAW MEASUREMENTS ==="));
+    Serial.println(F("standard,freq_hz,gamma_mag,gamma_phase_deg"));
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < num_samples; j++)
+        {
+            Serial.print(labels[i]);                           Serial.print(',');
+            Serial.print((long)freq_points[j]);                Serial.print(',');
+            Serial.print(osl_cal[i][j].gamma_mag,       6);   Serial.print(',');
+            Serial.println(osl_cal[i][j].gamma_phase_deg, 4);
+        }
+    }
+
+    // ── Computed error terms ─────────────────────────────────────────────────
+    Serial.println(F("=== ERROR TERMS ==="));
+    Serial.println(F("freq_hz,e00_re,e00_im,e11_re,e11_im,delta_e_re,delta_e_im"));
+    for (int j = 0; j < num_samples; j++)
+    {
+        Serial.print((long)freq_points[j]);           Serial.print(',');
+        Serial.print(error_terms[j].e00_re,     6);   Serial.print(',');
+        Serial.print(error_terms[j].e00_im,     6);   Serial.print(',');
+        Serial.print(error_terms[j].e11_re,     6);   Serial.print(',');
+        Serial.print(error_terms[j].e11_im,     6);   Serial.print(',');
+        Serial.print(error_terms[j].delta_e_re, 6);   Serial.print(',');
+        Serial.println(error_terms[j].delta_e_im, 6);
+    }
+
+    Serial.println(F("--- dump complete ---"));
 }
 
 double freq_points[num_samples];
@@ -329,7 +370,6 @@ void OLED_startup(void)
     display.println(F("Initializing..."));
     display.display();
 }
-
 
 
 
