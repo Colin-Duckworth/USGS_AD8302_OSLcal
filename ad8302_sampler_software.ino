@@ -4,10 +4,11 @@
 
 #include "ad8302.h"
 
-// *NOTE on MODES* 
+// *NOTE on MODES*
 // Mode 0 -> Sends data to RFsoc via UART
 // Mode 1 -> Just prints gain/phase data measured to serial monitor & OLED
 // Mode 2 -> Runs OSL protocol to calibrate the system by getting 3 term error array in EEPROM
+// Mode 3 -> Dumps error terms from EEPROM to serial monitor as CSV
 
 // ── Arduino entry points ──────────────────────────────────────────────────────
 void setup(void)
@@ -32,6 +33,9 @@ void setup(void)
     Serial.println(F("DBG: compute_error_terms"));
     compute_error_terms();
     Serial.println(F("DBG: done"));
+#elif MODE == 3
+    generate_freq_points();
+    dumpErrorTerms();
 #endif
 }
 
