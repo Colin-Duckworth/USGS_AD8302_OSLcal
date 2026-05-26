@@ -2,13 +2,16 @@
 
 #pragma once
 
+#include <EEPROM.h>
+
 // ── Select Mode ───────────────────────────────────────────────────────────────
 // 0 = UART command mode : send 'S' (0x53), receive "gain_dB,phase_deg\r\n"
 // 1 = Serial monitor mode: polls every POLL_INTERVAL_MS, prints human-readable
 // 2 = OSL calibration mode: Loops through frequency band and takes OSL readings
-// 3 = Prints error terms from EEPROM into the serial display for data analysis (under development)
+// 3 = Prints error terms from EEPROM into the serial display for data analysis
+// 4 = Live measurement mode: displays raw and OSL-corrected |Γ|/phase on OLED + serial
 
-#define MODE 3
+#define MODE 4
 #define POLL_INTERVAL_MS    2000    // (mode 1 only) ms between samples
 #define VREF_UPDATE_MS     10000    // how often to re-measure AREF (ms)
 #define VREF_SAMPLES           8    // number of bandgap reads to average
@@ -71,6 +74,7 @@ bool buttonPressed(void);
 void OSL_calibration_initiate(void);
 void compute_error_terms(void);
 void dumpErrorTerms(void);
+void sampleAndCorrect(double freq_hz);
 void OLED_startup(void);
 
 extern double freq_points[num_samples];
