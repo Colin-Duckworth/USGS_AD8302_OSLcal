@@ -38,7 +38,9 @@ float measureAref(void)
 
     // Restore normal ADC mux (DEFAULT ref, A0)
     analogReference(DEFAULT);
-    analogRead(VMAG_PIN);  // dummy read to flush mux change
+    delay(30);                  // let AREF cap recharge
+    analogRead(VMAG_PIN);       // flush mux
+    analogRead(VMAG_PIN);       // second flush for good measure
 
     return aref;
 }
@@ -49,19 +51,37 @@ inline float adcToMv(int counts)
     return counts * (adcVrefMv / ADC_RESOLUTION);
 }
 
-// ── Sample both channels, return results by pointer ──────────────────────────
+// ── Sample both channels, return results by pointer, implements trimmed mean ──────────────────────────
 void sample(float *gain_dB, float *phase_deg, float *vmag_mV, float *vphs_mV)
 {
-    uint16_t magAcc = 0, phsAcc = 0;
+    uint16_t magBuf[N_SAMPLES], phsBuf[N_SAMPLES];
 
-    analogRead(VMAG_PIN);   // settle mux on first channel
-    for (uint8_t i = 0; i < ADC_OVERSAMPLE; i++) magAcc += analogRead(VMAG_PIN);
+    analogRead(VMAG_PIN);  // settle mux
+    analogRead(VMAG_PIN);  // second settle
+    for (uint8_t i = 0; i < N_SAMPLES; i++) {
+        magBuf[i] = analogRead(VMAG_PIN);
+        analogRead(VPHS_PIN);  // dummy to settle mux before real read
+        phsBuf[i] = analogRead(VPHS_PIN);
+        analogRead(VMAG_PIN);  // dummy to settle mux before next mag read
+    }
 
-    analogRead(VPHS_PIN);   // settle mux on second channel
-    for (uint8_t i = 0; i < ADC_OVERSAMPLE; i++) phsAcc += analogRead(VPHS_PIN);
+    // Sort both buffers ascending
+    for (uint8_t i = 0; i < N_SAMPLES - 1; i++) {
+        for (uint8_t j = i + 1; j < N_SAMPLES; j++) {
+            if (magBuf[j] < magBuf[i]) { uint16_t t = magBuf[i]; magBuf[i] = magBuf[j]; magBuf[j] = t; }
+            if (phsBuf[j] < phsBuf[i]) { uint16_t t = phsBuf[i]; phsBuf[i] = phsBuf[j]; phsBuf[j] = t; }
+        }
+    }
 
-    *vmag_mV = adcToMv(magAcc / (float)ADC_OVERSAMPLE);
-    *vphs_mV = adcToMv(phsAcc / (float)ADC_OVERSAMPLE);
+    // Average the middle (N_SAMPLES - 2*TRIM) values
+    uint32_t magAcc = 0, phsAcc = 0;
+    for (uint8_t i = TRIM; i < N_SAMPLES - TRIM; i++) {
+        magAcc += magBuf[i];
+        phsAcc += phsBuf[i];
+    }
+
+    *vmag_mV = adcToMv(magAcc / (float)(N_SAMPLES - 2 * TRIM));
+    *vphs_mV = adcToMv(phsAcc / (float)(N_SAMPLES - 2 * TRIM));
 
     *gain_dB   = (*vmag_mV - MAG_CENTER_MV)  / MAG_SLOPE_MV_PER_DB;
     *phase_deg = (PHS_AT_0DEG_MV - *vphs_mV) / PHS_SLOPE_MV_PER_DEG;
