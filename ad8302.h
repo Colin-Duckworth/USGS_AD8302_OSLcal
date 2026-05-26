@@ -8,7 +8,7 @@
 // 2 = OSL calibration mode: Loops through frequency band and takes OSL readings
 // 3 = Prints error terms from EEPROM into the serial display for data analysis (under development)
 
-#define MODE 2
+#define MODE 3
 #define POLL_INTERVAL_MS    2000    // (mode 1 only) ms between samples
 #define VREF_UPDATE_MS     10000    // how often to re-measure AREF (ms)
 #define VREF_SAMPLES           8    // number of bandgap reads to average
@@ -37,7 +37,8 @@
 #define SCREEN_HEIGHT 64
 
 // EEPROM
-#define CAL_EEPROM_ADDR 0
+#define CAL_EEPROM_ADDR  0
+#define OSL_EEPROM_ADDR  (sizeof(ErrorTerms) * num_samples)   // immediately after error_terms
 
 // Sample definitions
 #define N_SAMPLES 16
@@ -69,6 +70,7 @@ void gainphase_to_gamma(float gain_dB, float phase_degrees, float *gamma_mag, fl
 bool buttonPressed(void);
 void OSL_calibration_initiate(void);
 void compute_error_terms(void);
+void dumpErrorTerms(void);
 void OLED_startup(void);
 
 extern double freq_points[num_samples];
