@@ -371,5 +371,102 @@ void OLED_startup(void)
     display.display();
 }
 
+// ── Mode 4 helpers ────────────────────────────────────────────────────────────
 
+// Returns the index in freq_points[] nearest to freq_hz
+static int findFreqIndex(double freq_hz)
+{
+    int    best_j    = 0;
+    double best_diff = fabs(freq_points[0] - freq_hz);
+    for (int j = 1; j < num_samples; j++) {
+        double diff = fabs(freq_points[j] - freq_hz);
+        if (diff < best_diff) { best_diff = diff; best_j = j; }
+    }
+    return best_j;
+}
 
+// ── Mode 4: sample, apply OSL correction, display raw and corrected ───────────
+void sampleAndCorrect(double freq_hz)
+{
+    // ── 1. Raw sample ──────────────────────────────────────────────────────────
+    float gain_dB, phase_deg, vmag_mV, vphs_mV;
+    sample(&gain_dB, &phase_deg, &vmag_mV, &vphs_mV);
+
+    // ── 2. Raw → ΓM (polar → rectangular) ─────────────────────────────────────
+    float raw_mag, raw_phase;
+    gainphase_to_gamma(gain_dB, phase_deg, &raw_mag, &raw_phase);
+
+    float m_rad = raw_phase * (PI / 180.0f);
+    float m_re  = raw_mag * cos(m_rad);
+    float m_im  = raw_mag * sin(m_rad);
+
+    // ── 3. Look up error terms at closest calibration frequency ────────────────
+    int j = findFreqIndex(freq_hz);
+
+    float e00_re = error_terms[j].e00_re,  e00_im = error_terms[j].e00_im;
+    float e11_re = error_terms[j].e11_re,  e11_im = error_terms[j].e11_im;
+    float de_re  = error_terms[j].delta_e_re, de_im = error_terms[j].delta_e_im;
+
+    // ── 4. ΓA = (ΓM - e00) / (Δe + e11·(ΓM - e00)) ───────────────────────────
+    float num_re = m_re - e00_re;
+    float num_im = m_im - e00_im;
+
+    float e11n_re = e11_re * num_re - e11_im * num_im;   // e11 × numerator
+    float e11n_im = e11_re * num_im + e11_im * num_re;
+
+    float den_re = de_re + e11n_re;                       // Δe + e11·(ΓM - e00)
+    float den_im = de_im + e11n_im;
+    float den_sq = den_re * den_re + den_im * den_im;
+
+    float a_re = (num_re * den_re + num_im * den_im) / den_sq;
+    float a_im = (num_im * den_re - num_re * den_im) / den_sq;
+
+    float corr_mag   = sqrt(a_re * a_re + a_im * a_im);
+    float corr_phase = atan2(a_im, a_re) * (180.0f / PI);
+
+    // ── 5. Serial output ───────────────────────────────────────────────────────
+    Serial.print(F("Freq: ")); Serial.print((long)freq_hz); Serial.println(F(" Hz"));
+    Serial.print(F("RAW  |G|=")); Serial.print(raw_mag,    4);
+    Serial.print(F("  ph="));    Serial.print(raw_phase,   2); Serial.println(F(" deg"));
+    Serial.print(F("CORR |G|=")); Serial.print(corr_mag,   4);
+    Serial.print(F("  ph="));    Serial.print(corr_phase,  2); Serial.println(F(" deg"));
+
+    // ── 6. OLED output ─────────────────────────────────────────────────────────
+    // Layout (128x64, textSize=1 = 6x8px per char, ~21 chars/line):
+    //  y= 0  "XXX MHz"
+    //  y=12  "RAW  |G|: 0.836"
+    //  y=22  "     ph: 98.9d"
+    //  y=36  "CORR |G|: 0.998"
+    //  y=46  "     ph: 142.3d"
+    //  y=56  ">btn: next freq"
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+
+    display.setCursor(0, 0);
+    display.print((float)freq_hz / 1.0e6f, 0);
+    display.print(F(" MHz"));
+
+    display.setCursor(0, 12);
+    display.print(F("RAW  |G|:"));
+    display.print(raw_mag, 3);
+
+    display.setCursor(0, 22);
+    display.print(F("     ph: "));
+    display.print(raw_phase, 1);
+    display.print(F("d"));
+
+    display.setCursor(0, 36);
+    display.print(F("CORR |G|:"));
+    display.print(corr_mag, 3);
+
+    display.setCursor(0, 46);
+    display.print(F("     ph: "));
+    display.print(corr_phase, 1);
+    display.print(F("d"));
+
+    display.setCursor(0, 56);
+    display.print(F(">btn: next freq"));
+
+    display.display();
+}
