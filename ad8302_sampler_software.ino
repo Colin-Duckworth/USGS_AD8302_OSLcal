@@ -9,6 +9,7 @@
 // Mode 1 -> Just prints gain/phase data measured to serial monitor & OLED
 // Mode 2 -> Runs OSL protocol to calibrate the system by getting 3 term error array in EEPROM
 // Mode 3 -> Dumps error terms from EEPROM to serial monitor as CSV
+// Mode 4 -> Pints gain/phase data measured to serial monitor & OLED but transforms based on error array in EEPROM
 
 // ── Arduino entry points ──────────────────────────────────────────────────────
 void setup(void)
@@ -36,6 +37,9 @@ void setup(void)
 #elif MODE == 3
     generate_freq_points();
     dumpErrorTerms();
+#elif MODE == 4
+    generate_freq_points();
+    EEPROM.get(CAL_EEPROM_ADDR, error_terms);
 #endif
 }
 
@@ -62,6 +66,17 @@ void loop(void)
     if (now - lastMs >= POLL_INTERVAL_MS) {
         lastMs = now;
         sampleAndPrint();
+    }
+
+#elif MODE == 4
+    static int  freq_idx     = 0;
+    static unsigned long lastSampleMs = 0;
+    if (now - lastSampleMs >= 300) {
+        lastSampleMs = now;
+        sampleAndCorrect(freq_points[freq_idx]);
+    }
+    if (buttonPressed()) {
+        freq_idx = (freq_idx + 1) % num_samples;  // advance, wrap around
     }
 #endif
 }
