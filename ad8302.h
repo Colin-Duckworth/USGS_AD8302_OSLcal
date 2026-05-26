@@ -8,7 +8,7 @@
 // 2 = OSL calibration mode: Loops through frequency band and takes OSL readings
 // 3 = Prints error terms from EEPROM into the serial display for data analysis (under development)
 
-#define MODE 1
+#define MODE 2
 #define POLL_INTERVAL_MS    2000    // (mode 1 only) ms between samples
 #define VREF_UPDATE_MS     10000    // how often to re-measure AREF (ms)
 #define VREF_SAMPLES           8    // number of bandgap reads to average
@@ -38,6 +38,10 @@
 
 // EEPROM
 #define CAL_EEPROM_ADDR 0
+
+// Sample definitions
+#define N_SAMPLES 16
+#define TRIM      4   // discard bottom 4 and top 4 (middle 8 averaged)
 
 struct GammaEntry { //defines data structure that includes gamma per frequency
     float frequency_hz;
